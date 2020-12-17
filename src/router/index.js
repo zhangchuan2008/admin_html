@@ -80,6 +80,20 @@ export const constantRoutes = [
     ]
   },
   {
+    path: '/class',
+    component: Layout,
+    hidden: true,
+    redirect: 'noredirect',
+    children: [
+      {
+        path: 'manage',
+        component: (resolve) => require(['@/views/system/class/manage/index'], resolve),
+        name: 'manage',
+        meta: { title: '班级管理', icon: 'user' }
+      }
+    ]
+  },
+  {
     path: '/dict',
     component: Layout,
     hidden: true,

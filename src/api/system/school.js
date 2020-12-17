@@ -59,3 +59,11 @@ export function getUploadData(query) {
     params: query
   })
 }
+//获取省市区数据
+export function getPositionData(query) {
+  return request({
+    url: '/system/data/treelist',
+    method: 'get',
+    params: query
+  })
+}

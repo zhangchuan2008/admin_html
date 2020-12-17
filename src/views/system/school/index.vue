@@ -11,13 +11,11 @@
         />
       </el-form-item>
       <el-form-item label="所在地区" prop="province">
-        <el-input
-          v-model="queryParams.province"
-          placeholder="请选择"
-          clearable
-          size="small"
-          @keyup.enter.native="handleQuery"
-        />
+        <el-cascader
+          expand-trigger="hover"
+          :options="allAddress"
+          v-model="queryParams.province">
+        </el-cascader>    
       </el-form-item>
       <el-form-item label="学校性质" prop="schoolType">
         <el-select v-model="queryParams.schoolType" placeholder="请选择" clearable size="small">
@@ -108,6 +106,13 @@
           <el-button
             size="mini"
             type="text"
+            icon="el-icon-date"
+            @click="toManage(scope.row)"
+            v-hasPermi="['system:school:date']"
+          >管理</el-button>
+          <el-button
+            size="mini"
+            type="text"
             icon="el-icon-edit"
             @click="handleUpdate(scope.row)"
             v-hasPermi="['system:school:edit']"
@@ -122,7 +127,6 @@
         </template>
       </el-table-column>
     </el-table>
-
     <pagination
       v-show="total>0"
       :total="total"
@@ -130,19 +134,24 @@
       :limit.sync="queryParams.pageSize"
       @pagination="getList"
     />
-    <!-- 添加或修改【请填写功能名称】对话框 -->
+    <!-- 添加或修改对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="700px" append-to-body>
       <el-form ref="form" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="学校名称" prop="schoolName">
           <el-input v-model="form.schoolName" placeholder="请输入学校名称" />
         </el-form-item>
         <el-form-item label="学校地址" prop="schoolAddress">
-          <el-input v-model="form.schoolAddress" placeholder="请输入学校地址" />
+          <!-- <el-input v-model="form.schoolAddress" placeholder="请输入学校地址" /> -->
+          <el-cascader
+            expand-trigger="hover"
+            :options="allAddress"
+            v-model="form.schoolArea">
+          </el-cascader>
         </el-form-item>
         <el-form-item label="学校校训" prop="schoolMotto">
           <el-input v-model="form.schoolMotto" placeholder="请输入学校校训" />
         </el-form-item>
-        <el-row :gutter="20">
+        <!-- <el-row :gutter="20">
           <el-col :span="10">
             <el-form-item label="经度" prop="longitude">
             <el-input v-model="form.longitude" placeholder="请输入经度" />
@@ -153,7 +162,7 @@
               <el-input v-model="form.latitude" placeholder="请输入维度" />
             </el-form-item>
           </el-col>
-        </el-row>
+        </el-row> -->
         <el-row :gutter="20">
           <el-col :span="10">
             <el-form-item label="学校性质" prop="schoolType" style="width:100%">
@@ -182,17 +191,29 @@
         </el-row>
         
         <el-form-item label="学校logo" prop="logoPic">
-          <!-- <el-input v-model="form.logoPic" placeholder="请输入学校logo" /> -->
+          <!-- <el-upload
+            class="upload"
+            action="https://shkt.oss-cn-chengdu.aliyuncs.com"
+            :drag="true"
+            :multiple="true"
+            :file-list="images"
+            :http-request="uploadHttp"
+            :before-upload="beforeAvatarUpload"
+            :on-remove="handleRemove"
+            list-type="picture">
+            <i class="el-icon-plus avatar-uploader-icon"></i>
+            <div class="el-upload__tip" slot="tip">只能上传jpg/jpeg/png文件，且不超过500kb</div>
+          </el-upload> -->
           <el-upload
-            :action="addressOss"
-            list-type="picture-card"
-            ref="upload"
-            :before-upload="upload"
-            :data="dataOss"
-            :on-success="uploadSuccess"
-            :on-error="uploadError"
-            >
-            <i class="el-icon-plus"></i>
+            class="upload-demo"
+            action="https://shkt.oss-cn-chengdu.aliyuncs.com"
+            :on-preview="handlePreview"
+            :on-remove="handleRemove"
+            :before-upload="beforeAvatarUpload"
+            :file-list="fileList2"
+            list-type="picture">
+            <el-button size="small" type="primary">点击上传</el-button>
+            <div slot="tip" class="el-upload__tip">只能上传jpg/png文件，且不超过500kb</div>
           </el-upload>
         </el-form-item>
         <el-form-item label="学校图片" prop="schoolPic">
@@ -219,7 +240,7 @@
         </el-form-item>
         <div id="app">
           <!-- <el-button @click="mapVisible=!mapVisible"> 打开 </el-button> -->
-          <Map v-on:mapLocationClose="mapLocationClose" v-on:mapLocationSave="mapLocationSave"></Map>
+          <Map v-on:mapLocationClose="mapLocationClose" v-on:mapLocationSave="mapLocationSave" @getPosition="getPosition" :areaDetail="areaDetail"></Map>
         </div>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -231,17 +252,40 @@
 </template>
 
 <script>
-import { listSchool, getSchool, delSchool, addSchool, updateSchool, exportSchool, getUploadData } from "@/api/system/school";
-// import ossClient from '@/utils/aliyun/aliyun.oss.client';
+import { listSchool, getSchool, delSchool, addSchool, updateSchool, exportSchool, getUploadData,getPositionData } from "@/api/system/school";
+import ossClient from '@/utils/aliyun/aliyun.oss.client';
 import Map from '@/components/map/baiduMap.vue'
 export default {
   name: "School",
-  components: {
-    Map
-  },
+  components: { Map },
   data() {
     return {
+      fileList2:[],
       mapVisible:false,
+      images: [],
+      uploadConf: {
+        region: null,
+        accessKeyId: null,
+        accessKeySecret: null,
+        bucket: null,
+        stsToken: null
+      },
+      selectImg: "",
+      loading: false,
+      arr:[],
+      num:0,
+      value1:[],
+      card: {
+        id: 0,
+        name: "",
+        price:0,
+        desc:'',
+        items:[],
+        imgUrl:'',
+      },
+      aliyun:{},
+      allAddress: [],//省市区
+      areaDetail: {},
       // 遮罩层
       loading: true,
       // 选中数组
@@ -254,7 +298,7 @@ export default {
       showSearch: true,
       // 总条数
       total: 0,
-      // 【请填写功能名称】表格数据
+      // 表格数据
       schoolList: [],
       // 弹出层标题
       title: "",
@@ -367,11 +411,27 @@ export default {
   },
   created() {
     this.getList();
-    getUploadData().then(response => {
-      
-    });
+    this.getCityData();
   },
   methods: {
+    // beforeAvatarUpload(file) {
+    //     const isJPG = file.type === 'image/jpeg';
+    //     const isLt2M = file.size / 1024 / 1024 < 2;
+
+    //     if (!isJPG) {
+    //       this.$message.error('上传头像图片只能是 JPG 格式!');
+    //     }
+    //     if (!isLt2M) {
+    //       this.$message.error('上传头像图片大小不能超过 2MB!');
+    //     }
+    //     return isJPG && isLt2M;
+    //   },
+    //   handleRemove(file, fileList) {
+    //     console.log(file, fileList);
+    //   },
+      handlePreview(file) {
+        console.log(file);
+      },
     mapLocationClose(){
 			this.mapVisible = false
 		},
@@ -379,7 +439,7 @@ export default {
 			console.log(e)
 		 	this.mapVisible = false
 		},
-    /** 查询【请填写功能名称】列表 */
+    /** 查询列表 */
     getList() {
       this.loading = true;
       listSchool(this.queryParams).then(response => {
@@ -409,13 +469,14 @@ export default {
         schoolType: null,
         logoPic: null,
         schoolPic: null,
-        schoolStatus: 0,
+        schoolStatus: '',
         createTime: null,
         schoolPhone: null,
         fixedPhone: null,
         introduce: null,
         schoolGrade: null,
-        updateTime: null
+        updateTime: null,
+        schoolArea: null
       };
       this.resetForm("form");
     },
@@ -423,6 +484,12 @@ export default {
     handleQuery() {
       this.queryParams.pageNum = 1;
       this.getList();
+    },
+    //获取省市区数据
+    getCityData() {
+      getPositionData().then(response => {
+        this.allAddress = response
+      });
     },
     /** 重置按钮操作 */
     resetQuery() {
@@ -439,7 +506,12 @@ export default {
     handleAdd() {
       this.reset();
       this.open = true;
-      this.title = "添加【请填写功能名称】";
+      this.title = "添加";
+      // this.uploadInit()
+    },
+    //管理
+    toManage(row){
+      this.$router.push({ path: "/class/manage", query: { schoolId: row.schoolId}})
     },
     /** 修改按钮操作 */
     handleUpdate(row) {
@@ -447,12 +519,21 @@ export default {
       const schoolId = row.schoolId || this.ids
       getSchool(schoolId).then(response => {
         this.form = response.data;
+        this.form.schoolType = this.form.schoolType += '';
+        this.form.schoolStatus = this.form.schoolStatus += '';
         this.open = true;
-        this.title = "修改【请填写功能名称】";
+        this.title = "修改";
+        this.areaDetail = {
+          longitude: response.data.longitude,
+          latitude: response.data.latitude,
+          address: response.data.schoolAddress
+        }
       });
+      // this.uploadInit()
     },
     /** 提交按钮 */
     submitForm() {
+      console.log('123',this.$children)
       this.$refs["form"].validate(valid => {
         if (valid) {
           if (this.form.schoolId != null) {
@@ -474,7 +555,7 @@ export default {
     /** 删除按钮操作 */
     handleDelete(row) {
       const schoolIds = row.schoolId || this.ids;
-      this.$confirm('是否确认删除【请填写功能名称】编号为"' + schoolIds + '"的数据项?', "警告", {
+      this.$confirm('是否确认删除编号为"' + schoolIds + '"的数据项?', "警告", {
           confirmButtonText: "确定",
           cancelButtonText: "取消",
           type: "warning"
@@ -488,7 +569,7 @@ export default {
     /** 导出按钮操作 */
     handleExport() {
       const queryParams = this.queryParams;
-      this.$confirm('是否确认导出所有【请填写功能名称】数据项?', "警告", {
+      this.$confirm('是否确认导出所有数据项?', "警告", {
           confirmButtonText: "确定",
           cancelButtonText: "取消",
           type: "warning"
@@ -498,31 +579,72 @@ export default {
           this.download(response.msg);
         })
     },
+    //接受位置信息
+    getPosition(val){
+      this.form.schoolAddress = val.address;
+      console.log('2345',this.form.schoolAddress)
+      this.form.longitude = val.longitude;
+      this.form.latitude = val.latitude;
+    },
+    //上传--初始化
+    async uploadInit () {
+      getUploadData().then(response => {
+        console.log('ccccc',response)
+        //获取阿里云token  这里是后台返回来的数据
+        const aliyun = {
+          Region: 'oss-cn-chengdu',
+          AccessKeyId: response.accessid,
+          AccessKeySecret: 'v2g63zJhYZ2Z6Glua5RVn2fsx9VYAe',
+          Bucket: 'shkt',
+          SecurityToken: response.signature
+        };
+        const {Region, AccessKeyId, AccessKeySecret, Bucket, SecurityToken} = aliyun;
+        this.uploadConf.region = Region;
+        this.uploadConf.accessKeyId = AccessKeyId;
+        this.uploadConf.accessKeySecret = AccessKeySecret;
+        this.uploadConf.bucket = Bucket;
+        this.uploadConf.stsToken = SecurityToken;
+        this.aliyun = aliyun
+      });
+    },
     //图片上传到阿里云
-    async upload(file) {
-      let fileName = "devicesource"+file.uid+file.name;//文件名，和后台约定
-      let reponse = await this.$store.dispatch({
-          type:'img/png',
-          data:{
-              fileName:fileName
-          }
-      })//索要签名
-      this.addressOss = reponse.data.result.host;//上传地址
-      this.dataOss = {
-          key:reponse.data.result.key,
-          ossAccessKeyId:reponse.data.result.ossAccessKeyId,
-          policy:reponse.data.result.policy,
-          signature:reponse.data.result.signature,
-          callback:reponse.data.result.callback,
-      };//上传额外参数
+    
+    uploadHttp({ file }) {
+      // const { imgName } = 'ALIOSS_IMG_';
+      const point = file.name.lastIndexOf(".");
+      let fileName = file.name.substr(0, point);
+      // let date = '202012171130'
+      // let fileNames = `${fileName}_${date}${suffix}`
+        console.log('3333',fileName)
+      // const fileName = `${imgName}/${Date.parse(new Date())}`;  //定义唯一的文件名
+      ossClient(this.uploadConf).put(fileName, file, {
+        'ContentType': 'image/jpeg'
+      }).then(({res, url, name}) => {
+        if (res && res.status == 200) {
+          console.log(`阿里云OSS上传图片成功回调`, res, url, name);
+        }
+      }).catch((err) => {
+        console.log(`阿里云OSS上传图片失败回调`, err);
+      });
     },
-    uploadError(err, file, fileList){
-      this.$message.error('图片上传失败！');
-    },
-    uploadSuccess(err, file, fileList){
-      this.$message.success('图片上传成功！');
-      this.photos.push(this.addressOss+""+this.dataOss.key)
-    }
+    beforeAvatarUpload (file) {
+      console.log('22222',file)
+            const isJPEG = file.name.split('.')[1] === 'jpeg';
+            const isJPG = file.name.split('.')[1] === 'jpg';
+            const isPNG = file.name.split('.')[1] === 'png';
+            const isLt500K = file.size / 1024 / 500 < 2;
+            if (!isJPG && !isJPEG && !isPNG) {
+                this.$message.error('上传图片只能是 JPEG/JPG/PNG 格式!');
+            }
+            if (!isLt500K) {
+                this.$message.error('单张图片大小不能超过 500KB!');
+            }
+            return (isJPEG || isJPG || isPNG) && isLt500K;
+        },
+    handleRemove (file, fileList) {
+            console.log(`移除图片回调`, fileList);
+        }
+
   }
 };
 </script>

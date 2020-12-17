@@ -1,51 +1,59 @@
 <template>
   <div>
     <!-- <el-dialog title="定位设置" :visible.sync="mapVisible" :before-close="close"   id="mapDialog" width="65%" top="8vh" :close-on-click-modal="false"> -->
-			<div>
-				<el-select
-					class="select"
-					v-model="search"
-					filterable
-					remote
-					clearable
-					reserve-keyword
-					clearable 
-					@clear="clearSearch"
-					placeholder="请输入地址"
-					:remote-method="mapNameChange"
-					@change="mapNameChange($event,'change')"
-					:loading="loading"
-					style="width: 100%;">
-					<el-option
-					  v-for="item in searchOption"
-					  :key="item.title"
-					  :label="item.title"
-					  :value="item.title">
-					</el-option>
-				  </el-select>
-			</div>
-            <baidu-map  class="map" :center="center" :zoom="zoom" @ready="handler"
-                       :scroll-wheel-zoom="true"
-                       @click="clickEvent"
-                       ak="33B192o1jPaqOHASGGAIkoMuwi8W76j3">
-                <!-- 地图控件位置 -->
-                <bm-navigation anchor="BMAP_ANCHOR_TOP_RIGHT"></bm-navigation>
-                <!-- 城市列表 -->
-                <bm-city-list anchor="BMAP_ANCHOR_TOP_LEFT"></bm-city-list>
-                <!-- 定位当前位置 -->
-                <bm-geolocation anchor="BMAP_ANCHOR_BOTTOM_RIGHT"  :showAddressBar="true" :autoLocation="true" @locationSuccess="getLoctionSuccess" ></bm-geolocation>
-                <!-- 地图容器 -->
-                <bm-view :style="{width:'100%',height: this.clientHeight+'px',flex: 1,marginBottom:'-30px'}"></bm-view>
-            </baidu-map>
-			<div class="demo-input-suffix" >
-			    <el-link type="info">lng：</el-link><el-input  class="lineinput"  style="width:100px" size="mini" v-model.number="locData.longitude"></el-input>
-			    <el-link type="info">lat：</el-link><el-input  class="lineinput"  style="width:100px" size="mini" v-model.number="locData.latitude"></el-input>
-			    <el-link type="info">地址：</el-link><el-input  class="lineinput"  style="width:250px" size="mini" v-model="locData.address"></el-input>
-			</div>
-            <!-- <div slot="footer" class="dialog-footer">
-                <el-button type="warning"  size="small" icon="el-icon-close" @click.native="close">取消</el-button>
-                <el-button type="primary" size="small" icon="el-icon-check" @click.native="findlocation">保存</el-button>
-            </div> -->
+	<div style="padding-left: 2%">
+		<label>地图查找:
+			<el-select
+				class="select"
+				v-model="search"
+				filterable
+				remote
+				clearable
+				reserve-keyword
+				clearable 
+				@clear="clearSearch"
+				placeholder="请输入地址"
+				:remote-method="mapNameChange"
+				@change="mapNameChange($event,'change')"
+				:loading="loading"
+				style="width: 90%;color: #606266;text-align: right">
+				<el-option
+					v-for="item in searchOption"
+					:key="item.title"
+					:label="item.title"
+					:value="item.title">
+				</el-option>
+			</el-select>
+		</label>
+	</div>
+	<div class="demo-input-suffix" >
+		<el-link type="info">
+			<span class="demo-text">经度：</span>
+		</el-link>
+		<el-input  class="lineinput" style="width:100px" size="mini" v-model.number="locData.longitude"></el-input>
+		<el-link type="info">
+			<span class="demo-text">纬度：</span>
+		</el-link>
+		<el-input  class="lineinput" style="width:100px" size="mini" v-model.number="locData.latitude"></el-input>
+		<el-link type="info">
+			<span class="demo-text">学校地址：</span>
+		</el-link>
+		<el-input  class="lineinput" style="width:250px" size="mini" v-model="locData.address"></el-input>
+	</div>
+	<baidu-map  class="map" :center="center" :zoom="zoom" @ready="handler" :scroll-wheel-zoom="true" @click="clickEvent" ak="33B192o1jPaqOHASGGAIkoMuwi8W76j3">
+		<!-- 地图控件位置 -->
+		<bm-navigation anchor="BMAP_ANCHOR_TOP_RIGHT"></bm-navigation>
+		<!-- 城市列表 -->
+		<bm-city-list anchor="BMAP_ANCHOR_TOP_LEFT"></bm-city-list>
+		<!-- 定位当前位置 -->
+		<bm-geolocation anchor="BMAP_ANCHOR_BOTTOM_RIGHT"  :showAddressBar="true" :autoLocation="true" @locationSuccess="getLoctionSuccess" ></bm-geolocation>
+		<!-- 地图容器 -->
+		<bm-view :style="{width:'100%',height: this.clientHeight+'px',flex: 1,marginBottom:'-30px'}"></bm-view>
+	</baidu-map>
+	<!-- <div slot="footer" class="dialog-footer">
+		<el-button type="warning"  size="small" icon="el-icon-close" @click.native="close">取消</el-button>
+		<el-button type="primary" size="small" icon="el-icon-check" @click.native="findlocation">保存</el-button>
+	</div> -->
 		
     <!-- </el-dialog> -->
   </div>
@@ -64,7 +72,11 @@ import {BaiduMap,BmNavigation,BmView,BmGeolocation,BmCityList} from 'vue-baidu-m
             BmCityList
         },
 		props:{
-			mapVisible:""
+			mapVisible:"",
+			areaDetail: {
+				type: Object,
+				default: function() {}
+ 			},
 		},
         data () {
             return {
@@ -81,8 +93,17 @@ import {BaiduMap,BmNavigation,BmView,BmGeolocation,BmCityList} from 'vue-baidu-m
 				searchOption:[],
 				loading:false
             }
-        },
+		},
+		watch: {
+			'locData.longitude': function(newValue) { // 监听title的变化
+				this.$emit('getPosition',this.locData)
+			}
+		},
 		mounted() {
+			console.log('3333',this.areaDetail)
+			if(JSON.stringify(this.areaDetail) != "{}"){
+				this.locData = Object.assign({}, this.areaDetail);
+			}
 		},
         methods: {
             handler ({BMap, map}) {
@@ -190,7 +211,12 @@ import {BaiduMap,BmNavigation,BmView,BmGeolocation,BmCityList} from 'vue-baidu-m
 	}
 .demo-input-suffix{
 	width: 100%;
-	margin-top: 40px;
+	margin-top: 20px;
+	padding-left: 5.5%;
+}
+.demo-text{
+	font-weight: 700;
+	color: #606266;
 }
 .BMap_bubble_title a{  /* 隐藏搜索结果的详情按钮 */
 	display: none;
